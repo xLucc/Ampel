@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+</head>
+
+<body>
+  <div id="container">Klausurampel</div>
+
+  <hr class="separator">
+  <div class="information">
+    <div id="timeDisplay">–</div>
+    <hr class="separator">
+
+    <h2>Timer konfigurieren</h2>
+    <p>Aktueller Timerwert: <span id="timerValue">–</span> Minuten</p>
+    <label for="duration">Dauer (1–120 Minuten):</label>
+    <input type="number" id="duration" min="1" max="120" value="15">
+    <button onclick="saveDuration()">Speichern</button>
+    <p id="saveStatus"></p>
+
+    <hr class="separator">
+
+    <div id="batteryVoltageContainer">
+      <p>Batteriespannung: <span id="batteryVoltage">–</span> V</p>
+    </div>
+
+    <hr class="separator">
+    <div id="footer">
+      <p class="engineered">
+        engineered by: <span>Carlo</span>, <span>Fabian</span>, <span>Nils</span>, <span>Aron</span>, <span>Joshua</span>
+     </p>
+    </div>
+
+    
+  </div>
+  
+
+
+  <script>
+    let timeout = 0;
+   
+
+    function updateColor() {
+      if(remaining_counter < 3) {
+        // LED Farbe vom Server fetchen
+        fetch('/led')
+          .then(response => response.json())
+          .then(data => {
+            const rgb = `rgb(${data.r}, ${data.g}, ${data.b})`;
+            const container = document.getElementById('container');
+            if (container) {
+              container.style.backgroundColor = rgb;
+            }
+          })
+          .catch(err => console.error(err));
+      }
+      else if(remaining_counter >= 3) {
+        fetch('/led')
+          .then(response => response.json())
+          .then(data => {
+            const rgb = `rgb(0, 0, 0)`;
+            const container = document.getElementById('container');
+          if (container) {
+            container.style.backgroundColor = rgb;
+          }
+        })
+        .catch(err => console.error(err));
+    }
+  }
+
+    /*function updateTime() {
+      fetch('/time')
+        .then(response => response.json())
+        .then(data => {
+          const remaining = data.remaining;
+          document.getElementById("timeDisplay").innerText = `${(remaining / 1000).toFixed(1)} Sekunden`;
+
+          // check for timeout
+          if (remaining == remaining_old) {
+            remaining_counter++;
+            if (remaining_counter >= 3) { // 3 seconds without change
+              document.getElementById("timeDisplay").innerText = "Zeit abgelaufen!";
+              clearInterval(timeout);
+              timeout = 0;
+
+              // Reset the background color
+              document.getElementById('container').style.backgroundColor = "black";
+            }
+          } else  {
+            remaining_old = remaining;
+          }
+
+
+
+            // Reset the background color
+            document.getElementById('container').style.backgroundColor = "black";
+          } else  {
+            remaining_old = remaining;
+          }
+
+
+        })
+
+        
+        
+        
+
+        .catch(err => console.error(err));
+    }*/
+
+    let remaining_old = null;
+    let remaining_counter = 0;
+    let checkpoint = 0;
+
+    function updateTime() {
+      fetch('/time')
+        .then(response => response.json())
+        .then(data => {
+          const remaining = data.remaining;
+          const totalSeconds = Math.floor(remaining / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          document.getElementById("timeDisplay").innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+          // Checkpoint-Logik: Wenn Timer checkpoint erreicht, weiß System, ob vorzeitig beendet oder nicht
+          // Ampel wurde gestartet
+          if (remaining/1000 > 4) {
+            checkpoint = 2; // Reset für neuen Timer-Durchlauf
+          }
+          // Wenn Timer Wert zwischen 1 und 5 erreicht -> checkpoint
+          if (remaining/1000 > 1 && remaining/1000 <= 4) {
+            checkpoint = 1; 
+          }
+
+          // Prüfen ob Timer noch am laufen ist
+          if (remaining === remaining_old) {
+            remaining_counter++;
+            if (remaining_counter >= 3 && remaining_counter <=15 && remaining == 0) {
+              if (checkpoint == 1) {
+                // Timer Zeit abgelaufen
+                document.getElementById("timeDisplay").innerText = "Zeit abgelaufen!";
+              } else if (checkpoint == 2) {
+                // Timer mittendrin unterbrochen
+                document.getElementById("timeDisplay").innerText = "Ampel beendet!";
+              }
+              else {
+                // Timer wurde noch nicht gestartet
+                document.getElementById("timeDisplay").innerText = "Karte verwenden zum Zurücksetzen und Starten";
+              }
+            }
+            else if (remaining_counter >= 3 && remaining_counter <=15 && remaining != 0){
+              document.getElementById("timeDisplay").innerText = "Ampel pausiert!";
+            }
+            else if (remaining_counter > 15 && remaining == 0) {
+                // Standard
+                document.getElementById("timeDisplay").innerText = "Aktionskarte zur Bedienung verwenden";
+              }
+          } else {
+            remaining_old = remaining;
+            remaining_counter = 0; 
+          }
+        })
+        .catch(err => console.error(err));
+    }
+
+
+
+    function saveDuration() {
+      const minutes = parseInt(document.getElementById("duration").value);
+      if (isNaN(minutes) || minutes < 1 || minutes > 120) {
+        alert("Zahl zwischen 1 und 120 ein.");
+        return;
+      }
+
+      fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration: minutes })
+      })
+      .then(response => {
+        if (response.ok) {
+         document.getElementById("saveStatus").innerText = "Gespeichert!";
+        } else {
+          document.getElementById("saveStatus").innerText = "Fehler beim Speichern.";
+        }
+      })
+      .catch(err => console.error(err));
+    }
+
+    function updateBatteryVoltage() {
+      fetch('/config')
+      .then(response => response.json())
+      .then(data => {
+        if ('battery_voltage' in data) {
+          document.getElementById('batteryVoltage').innerText = data.battery_voltage.toFixed(2);
+        }
+
+        if (data.battery_voltage <= 3.6) {
+          document.getElementById('batteryVoltageContainer').style.backgroundColor = "red";
+        } else if (data.battery_voltage <= 3.75 && data.battery_voltage > 3.6) {
+          document.getElementById('batteryVoltageContainer').style.backgroundColor = "orange";
+        } else {
+          document.getElementById('batteryVoltageContainer').style.backgroundColor = "black";
+        }
+      })
+
+      .catch(err => console.error('Fehler beim Laden der Batteriespannung:', err))
+      
+    }
+
+    function updateTimerValue() {
+      fetch('/config')
+      .then(response => response.json())
+      .then(data => {
+        if ('duration' in data) {
+          document.getElementById('timerValue').innerText = data.duration.toFixed(0);
+        }
+      })
+      .catch(err => console.error('Fehler beim Laden des Timer-Wertes', err));
+    }
+
+    // Methoden aufrufen
+    setInterval(updateTime, 1000);
+    setInterval(updateBatteryVoltage, 1000);
+    setInterval(updateColor, 500);
+    setInterval(updateTimerValue, 2000);
+
+  </script>
+</body>
+</html>
