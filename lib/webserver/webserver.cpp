@@ -26,11 +26,6 @@ void webserver_setup()
 
   server.serveStatic("/style.css", SPIFFS, "/style.css");
 
-  // NFC-freundliche Webserver-Konfiguration
-  /*server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    // Kurze Verzögerung um NFC nicht zu blockieren
-    yield();
-  });*/
 
   // JSON-Rückgabe der aktuellen LED-Farbe
   server.on("/led", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -52,6 +47,7 @@ void webserver_setup()
         json += "}";
         request->send(200, "application/json", json); });
 
+  // JSON-Sende Dauer des Timers in "config.json" speichern
   server.on("/config", HTTP_POST, [](AsyncWebServerRequest *request) {},
             NULL, // No file upload handler
             [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t, size_t)
@@ -76,6 +72,7 @@ void webserver_setup()
     saveConfig(durationMin);
     request->send(200, "application/json", "{\"success\":true}"); });
 
+  // Werte aus "config.json" abrufen
   server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         StaticJsonDocument<256> doc;
@@ -96,7 +93,7 @@ void webserver_setup()
         serializeJson(doc, response);
         request->send(200, "application/json", response); });
 
-  // NFC-freundliche Server-Konfiguration
+  // NFC Server-Konfiguration
   server.onNotFound([](AsyncWebServerRequest *request)
                     { request->send(404, "text/plain", "Not found"); });
 
@@ -104,6 +101,7 @@ void webserver_setup()
   Serial.println("Webserver gestartet - NFC-kompatibel konfiguriert");
 }
 
+// Methode zum Speichern der Dauer
 void saveConfig(uint32_t durationMinutes)
 {
   StaticJsonDocument<128> doc;

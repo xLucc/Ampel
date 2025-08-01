@@ -10,9 +10,8 @@ unsigned long start;
 void setup()
 {
   pinMode(3, OUTPUT);
-  digitalWrite(3, HIGH); // Ensure pin 3 is low initially
+  digitalWrite(3, HIGH); 
   pinMode(2, INPUT);
-  delay(5000); // Allow time for Serial to initialize
   nfc_setup(); // Initialize NFC hardware and libraries
   led_setup(); // Initialize LED hardware
   WiFi.mode(WIFI_AP);
